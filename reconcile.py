@@ -6,17 +6,50 @@ Run:  python3 reconcile.py
 """
 import json
 
+
+def parse_amount(val):
+    if isinstance(val, (int, float)):
+        return float(val)
+    if isinstance(val, str):
+        return float(val.replace(",", "").strip())
+    return float(val)
+
+
+latest_events = {}
+
+with open("payments.jsonl", "r", encoding="utf-8") as f:
+    for line in f:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            event = json.loads(line)
+        except Exception:
+            continue
+
+        if not isinstance(event, dict):
+            continue
+
+        txn_id = event.get("txn_id")
+        if not txn_id:
+            continue
+
+        ts = event.get("ts", "")
+        if txn_id not in latest_events or ts > latest_events[txn_id].get("ts", ""):
+            latest_events[txn_id] = event
+
 total = 0.0
 count = 0
 
-with open("payments.jsonl") as f:
-    for line in f:
-        event = json.loads(line)
-        if event["status"] == "success":
-            total += float(event["amount"])
+for event in latest_events.values():
+    if event.get("status") == "success":
+        try:
+            total += parse_amount(event["amount"])
             count += 1
+        except Exception:
+            continue
 
-with open("expected.txt") as f:
+with open("expected.txt", "r", encoding="utf-8") as f:
     expected = int(f.read().strip())
 
 if count != expected:
@@ -25,3 +58,4 @@ if count != expected:
 else:
     print(f"Check passed: {count} successful payments.")
     print(f"Your code: KOYA-{round(total)}")
+
